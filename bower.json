@@ -1,0 +1,25 @@
+{
+  "name": "notRecord",
+  "main": "notRecord.js",
+  "version": "0.1.0",
+  "homepage": "https://github.com/interrupter/record",
+  "authors": [
+    "interrupter"
+  ],
+  "description": "Simple ORM for JS front-end.",
+  "keywords": [
+    "ORM",
+    "front-end",
+    "frontend",
+    "ajax",
+    "json"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
