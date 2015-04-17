@@ -67,7 +67,7 @@ var notRecord_Interface = {
             },
             //сохранение изменений
             update: {
-                method: 'PUT',
+                method: 'POST',
                 postFix: '/:record['+DEFAULT_RECORD_ID_FIELD_NAME+']'
             },
             //удаление записи с сервера
