@@ -13,6 +13,7 @@ var notRecord_stdObjectProps = {
 };
 
 function capitalizeFirstLetter(string) {
+    'use strict';
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
@@ -41,9 +42,9 @@ var notRecord_Interface = {
             get: {
                 method: 'GET',
                 //то что будет, прибавленно к URL
-                postFix: '/:record['+DEFAULT_RECORD_ID_FIELD_NAME+']'
-                //:record[название поля из объекта], варианты /:record[_id]/:record[name] или /:record[date]
-                //поле должно существовать
+                postFix: '/:record[' + DEFAULT_RECORD_ID_FIELD_NAME + ']'
+                    //:record[название поля из объекта], варианты /:record[_id]/:record[name] или /:record[date]
+                    //поле должно существовать
             },
             //получить массив
             list: {
@@ -68,28 +69,33 @@ var notRecord_Interface = {
             //сохранение изменений
             update: {
                 method: 'POST',
-                postFix: '/:record['+DEFAULT_RECORD_ID_FIELD_NAME+']'
+                postFix: '/:record[' + DEFAULT_RECORD_ID_FIELD_NAME + ']'
             },
             //удаление записи с сервера
-            delete: {
+            'delete': {
                 method: 'DELETE',
-                postFix: '/:record['+DEFAULT_RECORD_ID_FIELD_NAME+']'
+                postFix: '/:record[' + DEFAULT_RECORD_ID_FIELD_NAME + ']'
             }
         }
     },
 
     extendObject: function (obj1, obj2) {
-        for (var attrname in obj2) {
-            obj1[attrname] = obj2[attrname];
+        'use strict';
+        var attrName = '';
+        for (attrName in obj2) {
+            if (obj2.hasOwnProperty(attrName)) {
+                obj1[attrName] = obj2[attrName];
+            }
         }
         return obj1;
     },
 
     parseLine: function (line, record) {
-        var i = 0;
-        var recordRE = /:record\[([\dA-z_-]+)\]/gi;
-        var recordFields = line.match(recordRE);
-        if (recordFields.length > 1) {
+        'use strict';
+        var i = 0,
+            recordRE = /\:record\[([\dA-z_\-]+)\]/gi,
+            recordFields = line.match(recordRE);
+        if (recordFields && (recordFields.length > 1)) {
             for (i = 1; i < recordFields.length; i++) {
                 line = line.replace(':record[' + recordFields[i] + ']', record[recordFields[i]]);
             }
@@ -99,16 +105,19 @@ var notRecord_Interface = {
     },
 
     getURL: function (record, actionData) {
-        var line = this.parseLine(this.api.url, record) + this.parseLine(actionData.postFix, record);
+        'use strict';
+        var line = this.parseLine(this.api.url, record) + ((actionData.hasOwnProperty('postFix')) ? this.parseLine(actionData.postFix, record) : '');
         return line;
     },
 
-    collectRequestData: function(record, actionData){
-        var requestData = {}, i = 0;
-        if (('data' in actionData) && typeof(actionData.data)!=='undefined' && actionData.data!==null){
-            for (i=0;i<actionData.data.length;i++){
-                var dataProviderName = 'get'+capitalizeFirstLetter(actionData.data[i]);
-                if (dataProviderName in record){
+    collectRequestData: function (record, actionData) {
+        'use strict';
+        var requestData = {},
+            i = 0;
+        if ((actionData.hasOwnProperty('data')) && typeof (actionData.data) !== 'undefined' && actionData.data !== null) {
+            for (i = 0; i < actionData.data.length; i++) {
+                var dataProviderName = 'get' + capitalizeFirstLetter(actionData.data[i]);
+                if (dataProviderName in record) {
                     requestData = this.extendObject(requestData, record[dataProviderName]());
                 }
             }
@@ -116,7 +125,8 @@ var notRecord_Interface = {
         return requestData;
     },
 
-    request: function(record, action, callback){
+    request: function (record, action, callback) {
+        'use strict';
         var actionData = this.api.actions[action];
         $.ajax(this.getURL(record, actionData), {
             method: actionData.method,
@@ -124,11 +134,11 @@ var notRecord_Interface = {
             data: this.collectRequestData(record, actionData),
             success: function (data) {
                 var result = [];
-                if (('isArray' in actionData)  && actionData.isArray){
+                if (('isArray' in actionData) && actionData.isArray) {
                     $.each(data, function (index, item) {
                         result.push(new notRecord(record.modelName, item));
                     });
-                }else{
+                } else {
                     result = new notRecord(record.modelName, data);
                 }
                 callback(result);
@@ -143,6 +153,7 @@ var notRecord_Interface = {
 
 //создаем объект с заданой моделью, если есть данные, то добавляем в него его
 var notRecord = function (modelName, item) {
+    'use strict';
     this._notOptions = {
         modelName: modelName,
         filter: {},
@@ -151,32 +162,16 @@ var notRecord = function (modelName, item) {
         fields: []
     };
     if (typeof item !== 'undefined' && item !== null) {
-        this = notRecord_Interface.extendObject(this, item);
+        notRecord_Interface.extendObject(this, item);
         this._notOptions.fields = Object.keys(item);
     }
     return this;
 };
 
 Object.defineProperties(notRecord.prototype, {
-    '_notOptions': {
-        enumerable: false
-    },
-    'save': notRecord_stdObjectProps,
-    'get': notRecord_stdObjectProps,
-    'list': notRecord_stdObjectProps,
-    'findBy': notRecord_stdObjectProps,
-    'filter': notRecord_stdObjectProps,
-    'setFilter': notRecord_stdObjectProps,
-    'setFindBy': notRecord_stdObjectProps,
-    'setPager': notRecord_stdObjectProps,
-    'setPageNumber': notRecord_stdObjectProps,
-    'setPageSize': notRecord_stdObjectProps,
-    //'getFilter': notRecord_stdObjectProps,
-    //'getPager': notRecord_stdObjectProps,
-    'update': notRecord_stdObjectProps,
-    'delete': notRecord_stdObjectProps,
     'modelName': {
         get: function () {
+            'use strict';
             return this._notOptions.modelName;
         }
     }
@@ -184,25 +179,31 @@ Object.defineProperties(notRecord.prototype, {
 
 
 notRecord.prototype.setFilter = function (filterData) {
+    'use strict';
     this._notOptions.filter = filterData;
     return this;
 };
 
 notRecord.prototype.getFilter = function () {
+    'use strict';
     return this._notOptions.filter;
 };
 
 notRecord.prototype.setPageNumber = function (pageNumber) {
+    'use strict';
+    console.log(this);
     this._notOptions.pageNumber = pageNumber;
     return this;
 };
 
 notRecord.prototype.setPageSize = function (pageSize) {
+    'use strict';
     this._notOptions.pageSize = pageSize;
     return this;
 };
 
 notRecord.prototype.setPager = function (pageSize, pageNumber) {
+    'use strict';
     this._notOptions.pageSize = pageSize;
     this._notOptions.pageNumber = pageNumber;
     return this;
@@ -217,20 +218,22 @@ notRecord.prototype.getPager = function () {
 
 notRecord.prototype.getRecord = function () {
     var result = {};
-    for (fieldName in this._notOptions.fields){
-        if (fieldName in this) obj[fieldName] = this[fieldName];
+    for (var fieldName in this._notOptions.fields) {
+        if (fieldName in this) result[fieldName] = this[fieldName];
     }
     return result;
 };
 
 notRecord.prototype.setFindBy = function (key, value) {
-    return this.setFilter({[key]: value});
+    var obj = {};
+    obj[key] = value;
+    return this.setFilter(obj);
 };
 
 
 
 notRecord.prototype.save = function (callback) {
-    notRecord_Interface.request(this, 'save' ,callback);
+    notRecord_Interface.request(this, 'save', callback);
 };
 
 notRecord.prototype.get = function (recordId, callback) {
@@ -239,7 +242,7 @@ notRecord.prototype.get = function (recordId, callback) {
 };
 
 notRecord.prototype.list = function (callback) {
-    notRecord_Interface.request(this, 'list',callback);
+    notRecord_Interface.request(this, 'list', callback);
 };
 
 notRecord.prototype.findBy = function (key, value, callback) {
