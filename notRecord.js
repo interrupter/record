@@ -21,9 +21,10 @@ var DEFAULT_RECORD_ID_FIELD_NAME = '_id';
 var DEFAULT_PAGE_NUMBER = 1;
 var DEFAULT_PAGE_SIZE = 10;
 
+
 var notRecord_Interface = {
     //описание методов запросов
-    api: {
+    /*api: {
         //корневой урл, :modelName название модели
         url: '/api/:modelName',
         //что можно делать
@@ -78,7 +79,7 @@ var notRecord_Interface = {
             }
         }
     },
-
+*/
     extendObject: function (obj1, obj2) {
         'use strict';
         var attrName = '';
@@ -90,7 +91,7 @@ var notRecord_Interface = {
         return obj1;
     },
 
-    parseLine: function (line, record) {
+    parseLine: function (line, record, actionName) {
         'use strict';
         var i = 0,
             recordRE = /\:record\[([\dA-z_\-]+)\]/gi,
@@ -101,12 +102,13 @@ var notRecord_Interface = {
             }
         }
         line = line.replace(':modelName', record.modelName);
+        line = line.replace(':actionName', actionName);
         return line;
     },
 
-    getURL: function (record, actionData) {
+    getURL: function (record, actionData, actionName) {
         'use strict';
-        var line = this.parseLine(this.api.url, record) + ((actionData.hasOwnProperty('postFix')) ? this.parseLine(actionData.postFix, record) : '');
+        var line = this.parseLine(record.interfaceManifest.url, record) + ((actionData.hasOwnProperty('postFix')) ? this.parseLine(actionData.postFix, record) : '');
         return line;
     },
 
@@ -125,10 +127,11 @@ var notRecord_Interface = {
         return requestData;
     },
 
-    request: function (record, action, callback) {
+    request: function (record, actionName, callback) {
         'use strict';
-        var actionData = this.api.actions[action];
-        $.ajax(this.getURL(record, actionData), {
+        console.log('request', actionName);
+        var actionData = record.interfaceManifest.actions[actionName];
+        $.ajax(this.getURL(record, actionData, actionName), {
             method: actionData.method,
             dataType: 'json',
             data: this.collectRequestData(record, actionData),
@@ -136,10 +139,10 @@ var notRecord_Interface = {
                 var result = [];
                 if (('isArray' in actionData) && actionData.isArray) {
                     $.each(data, function (index, item) {
-                        result.push(new notRecord(record.modelName, item));
+                        result.push(new notRecord(record.interfaceManifest, item));
                     });
                 } else {
-                    result = new notRecord(record.modelName, data);
+                    result = new notRecord(record.interfaceManifest, data);
                 }
                 callback(result);
             }
@@ -151,11 +154,11 @@ var notRecord_Interface = {
  *
  */
 
-//создаем объект с заданой моделью, если есть данные, то добавляем в него его
-var notRecord = function (modelName, item) {
+//создаем объект с заданым манифестом интерфейса, если есть данные, то добавляем в него
+var notRecord = function (interfaceManifest, item) {
     'use strict';
     this._notOptions = {
-        modelName: modelName,
+        interfaceManifest: interfaceManifest,
         filter: {},
         pageNumber: DEFAULT_PAGE_NUMBER,
         pageSize: DEFAULT_PAGE_SIZE,
@@ -165,6 +168,17 @@ var notRecord = function (modelName, item) {
         notRecord_Interface.extendObject(this, item);
         this._notOptions.fields = Object.keys(item);
     }
+    var that = this;
+    $.each(this._notOptions.interfaceManifest.actions, function (index, actionManifest) {
+        if (!(this.hasOwnProperty('$' + index))) {
+            that['$' + index] = function (callback) {
+                console.log('$'+index);
+                (notRecord_Interface.request.bind(notRecord_Interface, that, index+'', callback)).call();
+            }
+        } else {
+            console.error('interface manifest for ', interfaceManifest.model, ' conflict with notRecord property "', '$' + index, '" that alredy exists');
+        }
+    });
     return this;
 };
 
@@ -172,92 +186,92 @@ Object.defineProperties(notRecord.prototype, {
     'modelName': {
         get: function () {
             'use strict';
-            return this._notOptions.modelName;
+            return this._notOptions.interfaceManifest.model;
+        }
+    },
+    'interfaceManifest': {
+        get: function () {
+            'use strict';
+            return this._notOptions.interfaceManifest;
         }
     }
 });
 
+notRecord.prototype.setParam = function (paramName, paramValue) {
+    'use strict';
+    this._notOptions[paramName] = paramValue;
+    return this;
+}
+
+notRecord.prototype.getParam = function (paramName) {
+    'use strict';
+    return this._notOptions[paramName];
+}
+
+notRecord.prototype.setAttr = function (attrName, attrValue) {
+    'use strict';
+    this[attrName] = attrValue;
+    return this;
+}
+
+notRecord.prototype.getAttr = function (attrName) {
+    'use strict';
+    if (attrName in this.getParam('fields')) {
+        return this[attrName];
+    } else {
+        return undefined;
+    }
+}
 
 notRecord.prototype.setFilter = function (filterData) {
     'use strict';
-    this._notOptions.filter = filterData;
+    this.setParam('filter', filterData);
     return this;
 };
 
 notRecord.prototype.getFilter = function () {
     'use strict';
-    return this._notOptions.filter;
+    return this.getParam('filter');
 };
 
 notRecord.prototype.setPageNumber = function (pageNumber) {
     'use strict';
-    console.log(this);
-    this._notOptions.pageNumber = pageNumber;
+    this.setParam('pageNumber', pageNumber);
     return this;
 };
 
 notRecord.prototype.setPageSize = function (pageSize) {
     'use strict';
-    this._notOptions.pageSize = pageSize;
+    this.setParam('pageSize', pageSize);
     return this;
 };
 
 notRecord.prototype.setPager = function (pageSize, pageNumber) {
     'use strict';
-    this._notOptions.pageSize = pageSize;
-    this._notOptions.pageNumber = pageNumber;
+    this.setParam('pageSize', pageSize).setParam('pageNumber', pageNumber);
     return this;
 };
 
 notRecord.prototype.getPager = function () {
+    'use strict';
     return {
-        pageSize: this._notOptions.pageSize,
-        pageNumber: this._notOptions.pageNumber
+        pageSize: this.getParam('pageSize'),
+        pageNumber: this.getParam('pageNumber')
     };
 };
 
 notRecord.prototype.getRecord = function () {
+    'use strict';
     var result = {};
-    for (var fieldName in this._notOptions.fields) {
-        if (fieldName in this) result[fieldName] = this[fieldName];
+    for (var fieldName in this.getParam('fields')) {
+        if (this.hasOwnProperty(fieldName)) result[fieldName] = this[fieldName];
     }
     return result;
 };
 
 notRecord.prototype.setFindBy = function (key, value) {
+    'use strict';
     var obj = {};
     obj[key] = value;
     return this.setFilter(obj);
-};
-
-
-
-notRecord.prototype.save = function (callback) {
-    notRecord_Interface.request(this, 'save', callback);
-};
-
-notRecord.prototype.get = function (recordId, callback) {
-    this[DEFAULT_RECORD_ID_FIELD_NAME] = recordId;
-    notRecord_Interface.request(this, 'get', callback);
-};
-
-notRecord.prototype.list = function (callback) {
-    notRecord_Interface.request(this, 'list', callback);
-};
-
-notRecord.prototype.findBy = function (key, value, callback) {
-    this.setFindBy(key, value);
-    notRecord_Interface.request(this, 'filter', callback);
-};
-
-notRecord.prototype.filter = function (callback) {
-    notRecord_Interface.request(this, 'filter', callback);
-};
-
-notRecord.prototype.update = function (callback) {
-    notRecord_Interface.request(this, 'update', callback);
-};
-
-notRecord.prototype.delete = function (callback) {
-    notRecord_Interface.request(this, 'delete', callback);
 };
