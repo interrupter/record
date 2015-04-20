@@ -208,8 +208,14 @@ notRecord.prototype.getParam = function (paramName) {
     return this._notOptions[paramName];
 }
 
+
 notRecord.prototype.setAttr = function (attrName, attrValue) {
     'use strict';
+    var fields = this.getParam('fields');
+    if (!(attrName in fields)) {
+        fields.push(attrName);
+        this.setParam('fields', fields);
+    }
     this[attrName] = attrValue;
     return this;
 }
