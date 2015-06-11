@@ -23,63 +23,6 @@ var DEFAULT_PAGE_SIZE = 10;
 
 
 var notRecord_Interface = {
-    //описание методов запросов
-    /*api: {
-        //корневой урл, :modelName название модели
-        url: '/api/:modelName',
-        //что можно делать
-        actions: {
-            //добавление новой записи
-            save: {
-                //метод
-                method: 'POST',
-                // что будем передавать в массиве POST, тут механизм простой у notRecord должен быть метод с названием getFoo,
-                // в данном случае getRecord, его результаты будут переданы в POST запросе,
-                // все результаты возвращаемые такими функциями должны быть объектами,
-                // если их несколько, то они будут объединены в один объект
-                data: ['record']
-            },
-            //получать по номеру записи
-            get: {
-                method: 'GET',
-                //то что будет, прибавленно к URL
-                postFix: '/:record[' + DEFAULT_RECORD_ID_FIELD_NAME + ']'
-                    //:record[название поля из объекта], варианты /:record[_id]/:record[name] или /:record[date]
-                    //поле должно существовать
-            },
-            //получить массив
-            list: {
-                method: 'GET',
-                //применяются данные для постраницной выдачи
-                data: ['pager'],
-                isArray: true
-            },
-            //поиск по паре [название поля],[значение поля]
-            findBy: {
-                method: 'POST',
-                postFix: '/findBy',
-                data: ['filter']
-            },
-            //более комплексный вариант, пар может быть много
-            filter: {
-                method: 'POST',
-                postFix: '/filter',
-                data: ['pager', 'filter'],
-                isArray: true
-            },
-            //сохранение изменений
-            update: {
-                method: 'POST',
-                postFix: '/:record[' + DEFAULT_RECORD_ID_FIELD_NAME + ']'
-            },
-            //удаление записи с сервера
-            'delete': {
-                method: 'DELETE',
-                postFix: '/:record[' + DEFAULT_RECORD_ID_FIELD_NAME + ']'
-            }
-        }
-    },
-*/
     extendObject: function (obj1, obj2) {
         'use strict';
         var attrName = '';
@@ -94,21 +37,21 @@ var notRecord_Interface = {
     parseLine: function (line, record, actionName) {
         'use strict';
         var i = 0,
-            recordRE = /\:record\[([\dA-z_\-]+)\]/gi,
-            recordFields = line.match(recordRE);
-        if (recordFields && (recordFields.length > 1)) {
-            for (i = 1; i < recordFields.length; i++) {
-                line = line.replace(':record[' + recordFields[i] + ']', record[recordFields[i]]);
-            }
+            recordRE = ':record[',
+            fieldName= '';
+        while(line.indexOf(recordRE)>-1){
+            fieldName = line.slice(line.indexOf(recordRE)+recordRE.length, line.indexOf(']')-line.indexOf(recordRE)+1);
+
+            line = line.replace(':record[' + fieldName + ']', record.getAttr(fieldName));
         }
-        line = line.replace(':modelName', record.modelName);
+        line = line.replace(':modelName', record._notOptions.interfaceManifest.model);
         line = line.replace(':actionName', actionName);
         return line;
     },
 
     getURL: function (record, actionData, actionName) {
         'use strict';
-        var line = this.parseLine(record.interfaceManifest.url, record) + ((actionData.hasOwnProperty('postFix')) ? this.parseLine(actionData.postFix, record) : '');
+        var line = this.parseLine(record._notOptions.interfaceManifest.url, record, actionName) + ((actionData.hasOwnProperty('postFix')) ? this.parseLine(actionData.postFix, record, actionName) : '');
         return line;
     },
 
@@ -127,24 +70,43 @@ var notRecord_Interface = {
         return requestData;
     },
 
-    request: function (record, actionName, callback) {
+    request: function (record, actionName, callbackSuccess, callbackError) {
         'use strict';
         console.log('request', actionName);
-        var actionData = record.interfaceManifest.actions[actionName];
+        var actionData = record._notOptions.interfaceManifest.actions[actionName];
         $.ajax(this.getURL(record, actionData, actionName), {
             method: actionData.method,
             dataType: 'json',
             data: this.collectRequestData(record, actionData),
-            success: function (data) {
+            complete: function (data, code) {
                 var result = [];
-                if (('isArray' in actionData) && actionData.isArray) {
-                    $.each(data, function (index, item) {
-                        result.push(new notRecord(record.interfaceManifest, item));
-                    });
-                } else {
-                    result = new notRecord(record.interfaceManifest, data);
+                data = data.responseJSON;
+                if (code == "success") {
+
+                    if (('isArray' in actionData) && actionData.isArray) {
+                        $.each(data, function (index, item) {
+                            result.push(new notRecord(record._notOptions.interfaceManifest, item));
+                        });
+                    } else {
+                        result = new notRecord(record._notOptions.interfaceManifest, data);
+                    }
+                    callbackSuccess(result);
+                }else{
+                    if (typeof callbackError !== 'undefined' && callbackError!==null && code==="error") callbackError(data);
                 }
-                callback(result);
+                if ((typeof record._notOptions.interfaceManifest.showMessages !== 'undefined') && record._notOptions.interfaceManifest.showMessages) {
+                    var msg = ((actionData.hasOwnProperty('messages') && actionData.messages.hasOwnProperty(code)) ? actionData.messages[code] : data.error);
+                    if ((typeof msg !== 'undefined') && (msg != '')) {
+                        $('.top-left').notify({
+                            type: code=='success'?code:'danger',
+                            message: {
+                                text: msg
+                            }
+                        }).show();
+                    }
+
+                }
+
             }
         });
     }
@@ -171,9 +133,9 @@ var notRecord = function (interfaceManifest, item) {
     var that = this;
     $.each(this._notOptions.interfaceManifest.actions, function (index, actionManifest) {
         if (!(this.hasOwnProperty('$' + index))) {
-            that['$' + index] = function (callback) {
-                console.log('$'+index);
-                (notRecord_Interface.request.bind(notRecord_Interface, that, index+'', callback)).call();
+            that['$' + index] = function (callbackSuccess, callbackError) {
+                console.log('$' + index);
+                (notRecord_Interface.request.bind(notRecord_Interface, this, index + '', callbackSuccess,callbackError)).call();
             }
         } else {
             console.error('interface manifest for ', interfaceManifest.model, ' conflict with notRecord property "', '$' + index, '" that alredy exists');
@@ -212,7 +174,7 @@ notRecord.prototype.getParam = function (paramName) {
 notRecord.prototype.setAttr = function (attrName, attrValue) {
     'use strict';
     var fields = this.getParam('fields');
-    if (!(attrName in fields)) {
+    if (fields.indexOf(attrName)==-1) {
         fields.push(attrName);
         this.setParam('fields', fields);
     }
@@ -220,9 +182,18 @@ notRecord.prototype.setAttr = function (attrName, attrValue) {
     return this;
 }
 
+notRecord.prototype.setAttrs = function (hash) {
+    'use strict';
+    var h;
+    for(h in hash){
+        this.setAttr(h, hash[h]);
+    }
+    return this;
+}
+
 notRecord.prototype.getAttr = function (attrName) {
     'use strict';
-    if (attrName in this.getParam('fields')) {
+    if (this.getParam('fields').indexOf(attrName)>-1) {
         return this[attrName];
     } else {
         return undefined;
@@ -268,9 +239,13 @@ notRecord.prototype.getPager = function () {
 
 notRecord.prototype.getRecord = function () {
     'use strict';
-    var result = {};
-    for (var fieldName in this.getParam('fields')) {
-        if (this.hasOwnProperty(fieldName)) result[fieldName] = this[fieldName];
+    var result = {},
+        i = 0,
+        fieldName,
+        fields = this.getParam('fields');
+    for (i = 0; i < fields.length; i++) {
+        fieldName = fields[i];
+        result[fieldName] = this.getAttr(fieldName);
     }
     return result;
 };
