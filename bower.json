@@ -1,7 +1,7 @@
 {
   "name": "notRecord",
   "main": "notRecord.js",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "homepage": "https://github.com/interrupter/record",
   "authors": [
     "interrupter"

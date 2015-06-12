@@ -172,7 +172,7 @@ notRecord.prototype.getParam = function (paramName) {
 
 notRecord.prototype.getModelName = function () {
     'use strict';
-    return this._notOptions.interfaceManifest.model;
+    return (this._notOptions.hasOwnProperty('interfaceManifest')&&this._notOptions.interfaceManifest.hasOwnProperty('model'))?this._notOptions.interfaceManifest.model:null;
 }
 
 
