@@ -170,6 +170,11 @@ notRecord.prototype.getParam = function (paramName) {
     return this._notOptions[paramName];
 }
 
+notRecord.prototype.getModelName = function () {
+    'use strict';
+    return this._notOptions.interfaceManifest.model;
+}
+
 
 notRecord.prototype.setAttr = function (attrName, attrValue) {
     'use strict';
